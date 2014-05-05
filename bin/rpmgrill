@@ -163,7 +163,6 @@ sub main {
     # Fetch command-line arguments.  Barf if too many.
     my $arg = shift(@ARGV)
         or die "$ME: Missing arguments; try $ME --help\n";
-#    die "$ME: Too many arguments; try $ME --help\n"                 if @ARGV;
 
     my $base_dir;
 
@@ -187,19 +186,16 @@ sub main {
             if ($arg =~ /.*\.log/ and (-f $arg
                 or die "$ME: Input file $arg does not exist\n")) {
                 $log = $arg;
-                print "Has build log\n";
             }
             # Test if there is source RPM
             elsif ($arg =~ /.*\.src\.rpm/ and (-f $arg
                 or die "$ME: Input file $arg does not exist\n")) {
                 $srpm = $arg;
-                print "Has srpm\n";
             }
             # Test if there is RPM
             elsif ($arg =~ /.*\.rpm/ and (-f $arg
                 or die "$ME: Input file $arg does not exist\n")) {
                 $rpm = $arg;
-                print "Has rpm\n";
             }
             else {
                 die "$ME: Unknown argument $arg; try $ME --help\n";
@@ -207,7 +203,6 @@ sub main {
         }
         # Prepare base directory
         mkdir "rpmgrill";
-        mkdir "./rpmgrill/unpacked/src";
 
         scalar($rpm) and copy($rpm, "./rpmgrill/");
         scalar($srpm) and copy($srpm, "./rpmgrill/");
@@ -215,13 +210,12 @@ sub main {
 
         $base_dir = "./rpmgrill/unpacked";
 
-        # Move u log file into direcotry
+        # Move a log file into directory
         if (scalar($log)) {
             my @subdir = <$base_dir/*>;
             foreach my $dir (@subdir) {
                 if (not $dir =~ /src/) {
-                    print "$log ", "$dir/build.log\n";
-                    copy($log, "./$base_dir/$dir/build.log");
+                    copy($log, "./$base_dir/$dir/");
                 }
             }
         }
@@ -251,8 +245,6 @@ sub main {
     if (!scalar($log)){
         push(@disable_plugin, "BuildLog");
     }
-
-#    if (!scalar($rpm)) {
 
 
     #
