@@ -1,6 +1,7 @@
 bin/make-tooltips
 bin/rpmgrill
 bin/rpmgrill-fetch-build
+bin/rpmgrill-unpack-rpms
 bin/rpmgrill-update-ruby-advisory-db
 Build.PL
 doc/tooltips.txt
