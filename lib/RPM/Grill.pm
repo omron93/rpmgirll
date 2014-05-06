@@ -259,7 +259,11 @@ sub nvr {
     my $self = shift;
 
     # Get it from the srpm, because other rpms might have a diff subpkg name
-    return $self->srpm->nvr(@_);
+    defined $self->{_srpm} and return $self->srpm->nvr(@_);
+
+    # If there is no srpm, use NVR of first rpm
+    my @rpms = $self->rpms;
+    return $rpms[0]->nvr(@_);
 }
 
 ###################
