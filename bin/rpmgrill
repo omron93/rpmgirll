@@ -38,6 +38,7 @@ $ENV{IFS}    = '';
 use RPM::Grill;
 use List::Util          qw(max);
 use File::Copy;
+use File::Path;
 use utf8;
 
 ###############################################################################
@@ -201,23 +202,54 @@ sub main {
                 die "$ME: Unknown argument $arg; try $ME --help\n";
             }
         }
-        # Prepare base directory
-        mkdir "rpmgrill";
 
+        # Check if there is rpm and build log together
+        defined($rpm) and (defined($log)
+            or die "$ME: There is no build log for $rpm. Exiting...\n");
+        defined($log) and (defined($rpm)
+            or die "$ME: There is no RPM for $log. Exiting...\n");
+
+        # Prepare base directory
+        -d "rpmgrill" or mkdir "rpmgrill";
+
+        # Get name and architecture of package
+        my $name = "unrecognized";
+        my $arch = "";
+        defined($srpm) and ($name, $arch) = ($srpm =~ /([^\/]*)\.\w*?\.(\w*?)\.rpm/);
+        defined($rpm) and ($name, $arch) = ($rpm =~ /([^\/]*)\.\w*?\.(\w*?)\.rpm/);
+
+        # Remove files from previous failed build
+        if (-d "./rpmgrill/") {
+            if (-d "./rpmgrill/unpacked") {
+                print "Warning: There is ./rpmgrill/unpacked/ directory from\
+                previous build. Removing...\n";
+                rmtree "./rpmgrill/unpacked/";
+            }
+            unlink glob "./rpmgrill/*.rpm";
+        }
+
+        # Copy RPMs into directory and unpack them
         scalar($rpm) and copy($rpm, "./rpmgrill/");
         scalar($srpm) and copy($srpm, "./rpmgrill/");
         `rpmgrill-unpack-rpms ./rpmgrill/`;
 
-        $base_dir = "./rpmgrill/unpacked";
+        # Rename unpacked directory
+        if (-d "./rpmgrill/$name") {
+            unlink "./rpmgrill/unpacked";
+            die "Internal error: There is previous result for this package:\
+                ./rpmgrill/$name. Please remove it\n";
+        }
+        move("./rpmgrill/unpacked", "./rpmgrill/$name");
+
+        # Remove original RPMs
+        unlink glob "./rpmgrill/*.rpm";
+
+        # Set BASEDIR for rpmgrill
+        $base_dir = "./rpmgrill/$name";
 
         # Move a log file into directory
         if (scalar($log)) {
-            my @subdir = <$base_dir/*>;
-            foreach my $dir (@subdir) {
-                if (not $dir =~ /src/) {
-                    copy($log, "./$base_dir/$dir/");
-                }
-            }
+            copy($log, "$base_dir/$arch/build.log");
         }
     }
 
@@ -240,8 +272,8 @@ sub main {
         push(@disable_plugin, "Patches");
         push(@disable_plugin, "Manifest");
         push(@disable_plugin, "RpmScripts");
-        push(@disable_plugin, "BuildLog");
     }
+    # If there is no Build.log
     if (!scalar($log)){
         push(@disable_plugin, "BuildLog");
     }
