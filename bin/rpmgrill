@@ -55,6 +55,8 @@ OPTIONS:
   --list-plugins    list available plugins
   --disable=[LIST]  disable one or more plugins, e.g.: --disable=virus,buildlog
 
+  -d, --directory   directory to store expanded rpms
+
   -v, --verbose  show verbose progress indicators
   -n, --dry-run  make no actual changes
 
@@ -104,6 +106,7 @@ our $verbose = 0;
 our $NOT     = '';              # print "blahing the blah$NOT\n" if $debug
 our $list_plugins;              # list plugins, and quit
 our @disable_plugin;            # plugins to disable
+our $directory;                 # directory where store results
 sub handle_opts {
     use Getopt::Long;
     GetOptions(
@@ -114,6 +117,8 @@ sub handle_opts {
 
         'list-plugins' => \$list_plugins,
         'disable=s'  => \@disable_plugin,
+
+        'directory|d=s' => \$directory,
 
         help         => \&usage,
         man          => \&man,
@@ -160,6 +165,10 @@ sub main {
     # This is deliberate: it's because Getopt::Long only operates on @ARGV
     # and there's no clean way to make it use @_.
     handle_opts();                      # will set package globals
+
+    if(!defined($directory)) {
+        $directory = "./rpmgrill";
+    }
 
     # Fetch command-line arguments.  Barf if too many.
     my $arg = shift(@ARGV)
@@ -210,7 +219,7 @@ sub main {
             or die "$ME: There is no RPM for $log. Exiting...\n");
 
         # Prepare base directory
-        -d "rpmgrill" or mkdir "rpmgrill";
+        -d $directory or mkdir $directory;
 
         # Get name and architecture of package
         my $name = "unrecognized";
@@ -219,33 +228,33 @@ sub main {
         defined($rpm) and ($name, $arch) = ($rpm =~ /([^\/]*)\.\w*?\.(\w*?)\.rpm/);
 
         # Remove files from previous failed build
-        if (-d "./rpmgrill/") {
-            if (-d "./rpmgrill/unpacked") {
-                print "Warning: There is ./rpmgrill/unpacked/ directory from\
+        if (-d $directory) {
+            if (-d "$directory/unpacked") {
+                print "Warning: There is $directory/unpacked/ directory from\
                 previous build. Removing...\n";
-                rmtree "./rpmgrill/unpacked/";
+                rmtree "$directory/unpacked/";
             }
-            unlink glob "./rpmgrill/*.rpm";
+            unlink glob "$directory/*.rpm";
         }
 
         # Copy RPMs into directory and unpack them
-        scalar($rpm) and copy($rpm, "./rpmgrill/");
-        scalar($srpm) and copy($srpm, "./rpmgrill/");
-        `rpmgrill-unpack-rpms ./rpmgrill/`;
+        scalar($rpm) and copy($rpm, "$directory");
+        scalar($srpm) and copy($srpm, "$directory");
+        `rpmgrill-unpack-rpms $directory`;
 
         # Rename unpacked directory
-        if (-d "./rpmgrill/$name") {
-            unlink "./rpmgrill/unpacked";
+        if (-d "$directory/$name") {
+            unlink "$directory/unpacked";
             die "Internal error: There is previous result for this package:\
                 ./rpmgrill/$name. Please remove it\n";
         }
-        move("./rpmgrill/unpacked", "./rpmgrill/$name");
+        move("$directory/unpacked", "$directory/$name");
 
         # Remove original RPMs
-        unlink glob "./rpmgrill/*.rpm";
+        unlink glob "$directory/*.rpm";
 
         # Set BASEDIR for rpmgrill
-        $base_dir = "./rpmgrill/$name";
+        $base_dir = "$directory/$name";
 
         # Move a log file into directory
         if (scalar($log)) {
