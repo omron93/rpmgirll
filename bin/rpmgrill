@@ -177,7 +177,7 @@ sub main {
     my $base_dir;
 
     my $log;
-    my $rpm;
+    my @rpm;
     my $srpm;
 
 
@@ -197,15 +197,15 @@ sub main {
                 or die "$ME: Input file $arg does not exist\n")) {
                 $log = $arg;
             }
-            # Test if there is source RPM
+            # Test source RPM
             elsif ($arg =~ /.*\.src\.rpm/ and (-f $arg
                 or die "$ME: Input file $arg does not exist\n")) {
                 $srpm = $arg;
             }
-            # Test if there is RPM
+            # Test RPM
             elsif ($arg =~ /.*\.rpm/ and (-f $arg
                 or die "$ME: Input file $arg does not exist\n")) {
-                $rpm = $arg;
+                push(@rpm, $arg);
             }
             else {
                 die "$ME: Unknown argument $arg; try $ME --help\n";
@@ -213,10 +213,8 @@ sub main {
         }
 
         # Check if there is rpm and build log together
-        defined($rpm) and (defined($log)
-            or die "$ME: There is no build log for $rpm. Exiting...\n");
-        defined($log) and (defined($rpm)
-            or die "$ME: There is no RPM for $log. Exiting...\n");
+        defined($log) and (scalar(@rpm) != 1)
+            and die "$ME: This is not pair one build log and one RPM. Exiting...\n";
 
         # Prepare base directory
         -d $directory or mkdir $directory;
@@ -224,8 +222,14 @@ sub main {
         # Get name and architecture of package
         my $name = "unrecognized";
         my $arch = "";
-        defined($srpm) and ($name, $arch) = ($srpm =~ /([^\/]*)\.\w*?\.(\w*?)\.rpm/);
-        defined($rpm) and ($name, $arch) = ($rpm =~ /([^\/]*)\.\w*?\.(\w*?)\.rpm/);
+
+        # If there is no SRPM, use name from first RPM
+        if (defined($srpm)) {
+            ($name, $arch) = ($srpm =~ /([^\/]*\.\w*?)\.(\w*?)\.rpm/);
+        }
+        elsif (defined($rpm[0])) {
+            ($name, $arch) = ($rpm[0] =~ /([^\/]*\.\w*?)\.(\w*?)\.rpm/);
+        }
 
         # Remove files from previous failed build
         if (-d $directory) {
@@ -238,15 +242,17 @@ sub main {
         }
 
         # Copy RPMs into directory and unpack them
-        scalar($rpm) and copy($rpm, "$directory");
-        scalar($srpm) and copy($srpm, "$directory");
+        for my $package (@rpm) {
+            copy($package, "$directory");
+        }
+        defined($srpm) and copy($srpm, "$directory");
         `rpmgrill-unpack-rpms $directory`;
 
         # Rename unpacked directory
         if (-d "$directory/$name") {
             unlink "$directory/unpacked";
             die "Internal error: There is previous result for this package:\
-                ./rpmgrill/$name. Please remove it\n";
+                $directory/$name. Please remove it\n";
         }
         move("$directory/unpacked", "$directory/$name");
 
@@ -260,6 +266,20 @@ sub main {
         if (scalar($log)) {
             copy($log, "$base_dir/$arch/build.log");
         }
+
+        # Disable plugins which need source package or binary package
+        # If there is no SRPM
+        if (!defined($srpm)) {
+            push(@disable_plugin, "SpecFileSanity");
+            push(@disable_plugin, "SpecFileEncoding");
+            push(@disable_plugin, "Patches");
+            push(@disable_plugin, "Manifest");
+            push(@disable_plugin, "RpmScripts");
+        }
+        # If there is no Build.log
+        if (!defined($log)){
+            push(@disable_plugin, "BuildLog");
+        }
     }
 
     # Find all plugins. Do this before cd'ing, in case we have relative
@@ -272,21 +292,6 @@ sub main {
     # be the result of running 'rpm -qi --specfile').
     chdir $base_dir
         or die "$ME: Cannot cd $base_dir: $!\n";
-
-    # Disable plugins which need source package or binary package
-    # If there is no SRPM
-    if (!scalar($srpm)) {
-        push(@disable_plugin, "SpecFileSanity");
-        push(@disable_plugin, "SpecFileEncoding");
-        push(@disable_plugin, "Patches");
-        push(@disable_plugin, "Manifest");
-        push(@disable_plugin, "RpmScripts");
-    }
-    # If there is no Build.log
-    if (!scalar($log)){
-        push(@disable_plugin, "BuildLog");
-    }
-
 
     #
     # This is what does all the work!
