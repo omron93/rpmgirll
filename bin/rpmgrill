@@ -319,6 +319,11 @@ sub main {
         rename $tmpfile => $outfile
             or die "$ME: Cannot rename $tmpfile: $!\n";
     }
+
+    # Print location of results
+    if (defined($srpm) or defined($rpm[0])) {
+        print "Results from tests stored into: $base_dir\n";
+    }
 }
 
 
